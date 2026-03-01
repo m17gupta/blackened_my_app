@@ -9,27 +9,6 @@ dotenv.config();
 // Connect to Database & Test Supabase
 import { supabase } from './config/supabase';
 
-const testSupabase = async () => {
-    try {
-        if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-            console.warn('⚠️ Supabase credentials not found. Skipping startup check.');
-            return;
-        }
-
-        const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
-        if (error) {
-            console.error('❌ Supabase connection error:', error.message);
-        } else {
-            console.log('✅ Supabase connected successfully');
-        }
-    } catch (err: any) {
-        console.error('❌ Failed to test Supabase connection:', err.message);
-    }
-};
-
-// Test connection on startup
-testSupabase();
-
 const app = express();
 
 // Middleware
@@ -40,14 +19,22 @@ app.use(express.json());
 app.use('/api', userRoutes);
 
 // Basic health check route
-app.get('/', (req, res) => {
-    res.send('E-commerce API is running...');
+app.get('/', async (req, res) => {
+    try {
+        const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
+        if (error) {
+            return res.status(200).json({ status: 'partially_connected', error: error.message });
+        }
+        res.send('✅ E-commerce API is running and connected (V2)...');
+    } catch (err: any) {
+        res.status(500).json({ status: 'error', error: err.message });
+    }
 });
 
 const PORT = Number(process.env.PORT) || 5001;
 
-// Only listen locally, Vercel handles serverless execution
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+// Skip listen on Vercel
+if (!process.env.VERCEL) {
     app.listen(PORT, () => {
         console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     });
