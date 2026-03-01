@@ -1,13 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import userRoutes from './routes/userRoutes';
+import userRoutes from './routes/userRoutes.js';
+import { supabase } from './config/supabase.js';
 
 // Load env variables
 dotenv.config();
-
-// Connect to Database & Test Supabase
-import { supabase } from './config/supabase';
 
 const app = express();
 
@@ -25,7 +23,7 @@ app.get('/', async (req, res) => {
         if (error) {
             return res.status(200).json({ status: 'partially_connected', error: error.message });
         }
-        res.send('✅ E-commerce API is running and connected (V2)...');
+        res.send('✅ E-commerce API is running and connected (V3 - Stable)...');
     } catch (err: any) {
         res.status(500).json({ status: 'error', error: err.message });
     }

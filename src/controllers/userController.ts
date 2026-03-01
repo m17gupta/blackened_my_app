@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { supabase } from '../config/supabase';
+import { supabase } from '../config/supabase.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -11,8 +11,8 @@ const generateToken = (id: string) => {
 
 export const handleUserAction = async (req: Request, res: Response) => {
     const { email, password } = req.body;
-  console.log("email", email);
-  console.log("password", password);
+    console.log("email", email);
+    console.log("password", password);
     if (!email || !password) {
         return res.status(400).json({ error: 'Email and password required' });
     }
