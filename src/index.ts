@@ -11,14 +11,19 @@ import { supabase } from './config/supabase';
 
 const testSupabase = async () => {
     try {
+        if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+            console.warn('⚠️ Supabase credentials not found. Skipping startup check.');
+            return;
+        }
+
         const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
         if (error) {
-            console.error('Supabase connection error:', error.message);
+            console.error('❌ Supabase connection error:', error.message);
         } else {
-            console.log('Supabase connected successfully');
+            console.log('✅ Supabase connected successfully');
         }
     } catch (err: any) {
-        console.error('Failed to test Supabase connection:', err.message);
+        console.error('❌ Failed to test Supabase connection:', err.message);
     }
 };
 
