@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import userRoutes from './routes/userRoutes.js';
+import passwordRoutes from './routes/passwordRoutes.js';
 import { supabase } from './config/supabase.js';
 
 // Load env variables
@@ -15,6 +16,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api', userRoutes);
+app.use('/api/passwords', passwordRoutes);
 
 // Basic health check route
 app.get('/', async (req, res) => {
