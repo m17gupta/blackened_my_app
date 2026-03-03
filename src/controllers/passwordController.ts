@@ -6,7 +6,41 @@ import {
     CreatePasswordBody,
     UpdatePasswordBody,
 } from '../types/password.js';
-import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+
+// ─── Encryption Helpers (AES-256-CBC) ────────────────────────────────────────
+// Store ENCRYPTION_KEY as a 32-character (256-bit) secret in your .env file.
+// Example: ENCRYPTION_KEY=abcdef1234567890abcdef1234567890
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? 'default_32_char_key_change_me!!'; // 32 chars
+const IV_LENGTH = 16; // AES block size
+
+/**
+ * Encrypts a plaintext string using AES-256-CBC.
+ * Returns a string in the format: iv:encryptedData (both hex-encoded).
+ */
+function encrypt(plaintext: string): string {
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    return `${iv.toString('hex')}:${encrypted.toString('hex')}`;
+}
+
+/**
+ * Decrypts a string encrypted by `encrypt()`.
+ * Expects the format: iv:encryptedData (both hex-encoded).
+ * Returns the original plaintext string.
+ */
+function decrypt(encryptedText: string): string {
+    const [ivHex, encryptedHex] = encryptedText.split(':');
+    if (!ivHex || !encryptedHex) throw new Error('Invalid encrypted format');
+    const iv = Buffer.from(ivHex, 'hex');
+    const key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    const decrypted = Buffer.concat([decipher.update(Buffer.from(encryptedHex, 'hex')), decipher.final()]);
+    return decrypted.toString('utf8');
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -23,7 +57,7 @@ async function payloadToColumns(payload: PasswordPayload): Promise<Record<string
         case 'website':
             base.url = payload.url;
             base.username = payload.username;
-            base.password = await bcrypt.hash(payload.password, 10);
+            base.password = encrypt(payload.password);
             break;
 
         case 'database_username':
@@ -31,14 +65,12 @@ async function payloadToColumns(payload: PasswordPayload): Promise<Record<string
             base.port = payload.port ?? null;
             base.database_name = payload.databaseName;
             base.username = payload.username;
-            base.password = payload.password
-                ? await bcrypt.hash(payload.password, 10)
-                : null;
+            base.password = payload.password ? encrypt(payload.password) : null;
             break;
 
         case 'password_with_url':
             base.url = payload.url;
-            base.password = await bcrypt.hash(payload.password, 10);
+            base.password = encrypt(payload.password);
             base.notes = payload.notes ?? null;
             break;
 
@@ -48,9 +80,7 @@ async function payloadToColumns(payload: PasswordPayload): Promise<Record<string
             base.port = payload.port ?? null;
             base.database_name = payload.databaseName ?? null;
             base.username = payload.username ?? null;
-            base.password = payload.password
-                ? await bcrypt.hash(payload.password, 10)
-                : null;
+            base.password = payload.password ? encrypt(payload.password) : null;
             break;
 
         case 'credit_card':
@@ -66,9 +96,7 @@ async function payloadToColumns(payload: PasswordPayload): Promise<Record<string
 
         case 'generic':
             base.username = payload.username ?? null;
-            base.password = payload.password
-                ? await bcrypt.hash(payload.password, 10)
-                : null;
+            base.password = payload.password ? encrypt(payload.password) : null;
             base.notes = payload.notes ?? null;
             break;
     }
@@ -183,30 +211,22 @@ export const getPasswords = async (req: Request, res: Response) => {
 
 /**
  * GET /api/passwords/:id
- * Fetch a single password record by its UUID.
+ * Fetch all password records belonging to the authenticated user.
  */
 export const getPasswordById = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { id } = req.params;
-
     try {
         const { data, error } = await supabase
             .from('passwords')
             .select('*')
-            .eq('id', id)
             .eq('user_id', userId)
-            .single();
+            .order('created_at', { ascending: false });
 
-        if (error) {
-            if (error.code === 'PGRST116') {
-                return res.status(404).json({ error: 'Password not found' });
-            }
-            throw error;
-        }
+        if (error) throw error;
 
-        return res.status(200).json(rowToPasswordType(data));
+        return res.status(200).json((data ?? []).map(rowToPasswordType));
     } catch (err: any) {
         console.error('getPasswordById error:', err);
         return res.status(500).json({ error: err.message });
@@ -327,6 +347,61 @@ export const deletePassword = async (req: Request, res: Response) => {
         return res.status(200).json({ message: 'Password deleted successfully' });
     } catch (err: any) {
         console.error('deletePassword error:', err);
+        return res.status(500).json({ error: err.message });
+    }
+};
+
+
+// show password
+export const showPassword = async (req: Request, res: Response) => {
+    console.log("calling show password");
+    const id = req.body.id;
+    console.log("show password id:", id);
+    if (!id) return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+        const { data, error } = await supabase
+            .from('passwords')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) {
+            if (error.code === 'PGRST116') {
+                return res.status(404).json({ error: 'Password not found' });
+            }
+            throw error;
+        }
+
+        if (!data) {
+            return res.status(404).json({ error: 'Password not found' });
+        }
+
+        console.log("fetched record for user_id:", data.user_id);
+
+        // Decrypt and return the actual plaintext password
+        if (!data.password) {
+            return res.status(200).json({ password: null });
+        }
+
+        console.log("stored password value:", data.password.substring(0, 10) + '...');
+
+        // Old bcrypt hashes (format: $2b$... or $2a$...) cannot be decrypted — bcrypt is one-way.
+        // Delete this entry in Supabase and re-save it through the app to fix this.
+        if (data.password.startsWith('$2b$') || data.password.startsWith('$2a$')) {
+            console.log("⚠️  Legacy bcrypt hash detected — cannot decrypt.");
+            return res.status(409).json({
+                error: 'legacy_hash',
+                message: 'This password was saved before encryption was introduced and cannot be retrieved. Please delete and re-save this entry.',
+            });
+        }
+
+        // AES-encrypted entry — decrypt and return plaintext
+        const plaintextPassword = decrypt(data.password);
+        console.log("✅ Decrypted successfully");
+        return res.status(200).json({ password: plaintextPassword });
+    } catch (err: any) {
+        console.error('showPassword error:', err);
         return res.status(500).json({ error: err.message });
     }
 };

@@ -5,6 +5,7 @@ import {
     createPassword,
     updatePassword,
     deletePassword,
+    showPassword,
 } from '../controllers/passwordController.js';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 
@@ -20,5 +21,5 @@ router.get('/:id', getPasswordById);   // GET    /api/passwords/:id
 router.post('/', createPassword);    // POST   /api/passwords
 router.put('/:id', updatePassword);    // PUT    /api/passwords/:id
 router.delete('/:id', deletePassword);  // DELETE /api/passwords/:id
-
+router.post('/showPassword/:id', showPassword);  // GET    /api/passwords/:id
 export default router;
