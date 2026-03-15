@@ -80,3 +80,18 @@ export const getUsers = async (req: Request, res: Response) => {
         return res.status(500).json({ error: error.message });
     }
 };
+
+// get all list of users
+export const handleListUsers = async (req: Request, res: Response) => {
+    try {
+        const { data: users, error } = await supabase
+            .from('users')
+            .select('id, name, email,role, dob, created_at, updated_at');
+
+        if (error) throw error;
+
+        return res.status(200).json(users);
+    } catch (error: any) {
+        return res.status(500).json({ error: error.message });
+    }
+};
